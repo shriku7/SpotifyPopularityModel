@@ -1,0 +1,456 @@
+---
+title: "Investigating Popularity of Songs on Spotify"
+author: 'Dancing Queens: Karianna Klassen, Madeline Waterfield, Mark Yukelis, Shrikrishna
+  Sriram'
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+bibliography: references.bib
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load-libraries, echo = FALSE, message = FALSE, warning = FALSE}
+library(tidyverse)
+library(tidytuesdayR)
+library(tidymodels)
+library(car)
+library(viridis)
+library(knitr)
+library(ggridges)
+library(ggstance)
+library(sysfonts)
+library(showtext)
+library(grid)
+library(gridExtra)
+showtext_auto(enable = TRUE, record = TRUE)
+font_add_google("Tinos") 
+```
+
+```{r load-data, echo = FALSE, message = FALSE}
+spotify_data <- read_csv("data/spotify_songs.csv")
+```
+
+```{r clean-data, echo = FALSE, message = FALSE}
+spotify_clean <- spotify_data %>%
+  select(-playlist_id, -playlist_name, -playlist_subgenre) %>%
+  distinct()
+
+spotify_clean <- spotify_clean %>%
+  mutate(length = (duration_ms/60000)) %>%
+  mutate(Genre = case_when(playlist_genre == "pop" ~ "Pop",
+                           playlist_genre == "rock" ~ "Rock", 
+                           playlist_genre == "edm" ~ "EDM", 
+                           playlist_genre == "latin" ~ "Latin",
+                           playlist_genre == "rap" ~ "Rap", 
+                           playlist_genre == "r&b" ~ "R&B")) 
+
+spotify_top <- spotify_clean %>%
+  arrange(desc(track_popularity)) %>%
+  slice(1:3038) %>% mutate(rank = "TOP 10%")
+
+spotify_all <- spotify_clean %>%
+  arrange(desc(track_popularity)) %>%
+  slice(3039: n()) %>%  mutate(rank = "BOTTOM 90%")
+
+spotify <- spotify_top %>%
+  full_join(spotify_all)
+```
+
+
+# Introduction and Data
+
+## Background and Significance
+
+Spotify, a Swedish company founded in 2006 by Daniel Ek and Martin Lorentzon, is self-described as "the world’s most popular audio streaming subscription service." Across 183 markets, Spotify has 406 million users, 180 million subscribers, 82 million tracks, and 3.6 million podcasts [@spotify_for_the_record]. Unfortunately for artists, the large number of users does not change the fact that only a small percentage of the 82 million tracks reach over 1 million streams. According to Spotify's Loud&Clear website that intends to increase transparency for artists, earning 1 million streams would put a song in the top 719,000 tracks, which means that only 0.87% of songs receive over a million streams [@loud_and_clear_2022]. Only 240 songs have reached Spotify's "Billions Club" by earning over one billion streams [@billions_club]. For small artists, "going viral" or earning a significant number of streams is difficult and unlikely. In an effort to help artists understand how to create a song that will be successful on Spotify, we will investigate attributes of popular songs and attempt to reach a consensus on what makes a song more successful than others. 
+
+## Data
+
+In the following project, we will investigate a dataset of 30,385 Spotify songs in order to determine whether songs with certain characteristics are more likely to be popular than others. The dataset spotify_songs.csv is from a TidyTuesday launch on January 21, 2020 [@spotifydata]. The data was gathered by spotifyr, an R wrapper for pulling track audio features and other information from Spotify’s Web API in bulk. The original dataset has 32,833 observations, or songs, and 23 variables, and was created by Kaylin Pavlik. However, because some songs are put on multiple playlists, those 32,833 observations include some duplicate songs. After cleaning the data by removing three playlist identifiers (subgenre, id, and name) and keeping only distinct observations, our dataset has 30,385 observations, and each observation is a song. Thus, the dataset we will be working with has 30,385 observations and 20 variables. We will be focusing on six variables: popularity, genre, length, tempo, loudness, and acousticness. Song popularity refers to the popularity of a song (or number of streams) relative to other songs in the dataset, ranked from 0-100 (where a higher value denotes a more popular song). Genre refers to the genre of the playlist the song is located on, of which there are six: Pop, Rap, R&B, Latin, EDM, and Rock. Song duration in the original dataset refers to song length in milliseconds, but we mutated a new variable to measure song length in minutes. Song tempo refers to average number of beats per minutes (BPM) in a track, and represents the speed or pace of the song. Song loudness refers to the average loudness of a song in decibells (dB), ranging from 0 to -60 dB (with 0 being the loudest). Song acousticness is a measure of how confident the Spotify API is that a song is acoustic, meaning it lacks electronic modification. Acousticness is measured from 0 to 1.0, with 1.0 being 100% confident that a song is acoustic. The higher the acousticness score, the less electronic modificaiton it contains. Popularity, genre, length, tempo, loudness, and acousticness were originally determined by Spotify's Web API. 
+
+## Research Question
+
+Our research question is: **What characteristics make a song on Spotify more likely to be popular than other songs on Spotify?** We are endeavouring to find out what qualities make a song popular in order to be able to tell artists what kind of song has the most likelihood of becoming popular. We can break up our research question into two smaller research questions: 
+
+**Research Question 1: Do some genres on Spotify tend to have more popular songs than others?** Before our exploration, we hypothesize that the pop genre will have the most popular songs, while all other genres will not be significantly different than the mean.
+
+**Research Question 2:  Do length, tempo, loudness and acoustiness tend affect popularity on Spotify, and in what way? ** 
+Before our exploration, we hypothesize that they all are significant, with length having an overall negative effect while tempo, loudness and acoustiness have an overall positive effect. 
+
+
+# Methodology for Exploratory Data Analysis.
+
+When conducting our analysis, our team sought to understand what qualities make a song more likely to be popular. To do this, we decided to compare the mean attributes of the top 10% of songs in terms of popularity and the mean attributes of the bottom 90% of songs in terms of popularity, hoping that differences (or continuities) in summary statistics would give us insight into how more popular songs are different from less popular songs. 
+
+## Exploratory Data Analysis
+
+### Genre
+
+```{r explore-mean-pop, echo = FALSE,message = FALSE}
+mean_pop <- spotify_clean %>%
+  summarise(mean(track_popularity)) %>%
+  pull()
+```
+
+```{r explore-mean-pop2, echo = FALSE, fig.height = 3.5, message = FALSE}
+spotify_clean %>%
+  ggplot(aes(x = track_popularity)) +
+  geom_bar(fill = "#00009A") + 
+  theme_bw() +
+  theme(plot.title = element_text(size = 13, family = "Tinos"), 
+        axis.title.x = element_text(size = 9, family = "Tinos"), 
+        axis.title.y = element_text(size = 9, family = "Tinos"), 
+        plot.caption = element_text(size = 9, family = "Tinos")) +
+  geom_vline(xintercept = mean_pop, color = "red", size = 2) +
+  labs(title = "Figure 1: Number of Tracks per Popularity Score", y = "Count", x = "Popularity Score", 
+       caption = "*Red line represents average popularity")
+```
+
+As seen in Figure 1, the average popularity score of all songs in the dataset is 41.004. 
+
+```{r explore-genre, echo = FALSE, fig.height = 4, fig.width = 4, message = FALSE}
+spotify_clean %>%
+  group_by(Genre) %>%
+  summarise(n(), (n()/nrow(spotify_clean)*100), temp = mean(track_popularity), 
+            diff = temp - mean_pop) %>%
+  arrange(desc(temp)) %>%
+  kable(caption = "Genre and Popularity Summary Statistics", col.names = c("Genre", "Count", "% of Total", "Avg. Popularity", "Diff. from Overall Avg."), digits = 2)
+```
+
+```{r explore-genre2, echo = FALSE, fig.height = 4, message = FALSE}
+spotify_temp <- spotify_clean %>%
+  group_by(Genre) %>%
+  summarise(temp = mean(track_popularity))
+
+plot1 <- ggplot(data = spotify_temp, aes(x = Genre, y = temp, fill = Genre)) + 
+  geom_bar(stat = "identity") + 
+  geom_hline(yintercept = mean_pop, color = "red", size = 2, show.legend = TRUE) +
+  theme_bw() +
+  theme(plot.title = element_text(size = 10, family = "Tinos"), 
+        axis.title.x = element_text(size = 9, family = "Tinos"), 
+        axis.title.y = element_text(size = 9, family = "Tinos"), 
+        plot.caption = element_text(size = 8, family = "Tinos")) +
+  scale_fill_viridis(discrete = TRUE, option = "C", name = "Genre") + 
+  labs(title = "Figure 2: Average Popularity of Each Genre", 
+       caption = "*Red Line Shows Overall Average Popularity", y = "Popularity")
+
+plot2 <- ggplot(data = spotify, aes(x = rank, fill = playlist_genre)) +
+  geom_bar(position = "fill") +
+  labs(title = "Figure 3: Proportions of Genre", 
+       subtitle = "For the Bottom 90% vs. the Top 10%" ,
+       x = "Percentile", y = "Percentage") +
+  theme_bw() +
+  theme_bw() +
+  theme(plot.title = element_text(size = 10, family = "Tinos"),
+        plot.subtitle = element_text(size = 9, family = "Tinos"),
+        axis.title.x = element_text(size = 9, family = "Tinos"), 
+        axis.title.y = element_text(size = 9, family = "Tinos")) +
+  scale_fill_viridis(discrete = TRUE, option = "C", name = "Genre")
+
+grid.arrange(plot1, plot2, ncol = 2)
+```
+
+As seen in Table 1 and Figure 2, the genres Pop, Latin, and Rap all have higher average popularity scores than the overall average popularity, while R&B and EDM have lower average popularity scores. Figure three shows that the Pop genre has the largest percentage of songs in the top 10%, and that the proportion of Pop music in the top 10% is larger than the proportion of Pop music in the bottom 90%, which further points to Pop music being the most popular. 
+
+### Length, Tempo, Loudness, & Acousticness 
+
+```{r sum-stats-dtla, echo = FALSE, message = FALSE, warning = FALSE}
+spotify %>%
+  group_by(rank) %>%
+  summarise(mean(length), mean(tempo), mean(loudness), mean(acousticness)) %>%
+  kable(caption = "Summary Statistics for Length, Tempo, Loudness, & Acousticness; Comparison of Top 10% and Bottom 90%", 
+        col.names = c("Percentile", "Avg. Length (min)", "Avg. Tempo (BPM)", 
+                      "Avg. Loudness (dB)", "Avg. Acousticness"), 
+        digits = 2)
+```
+
+It is interesting that there is not a lot of difference between our averages: There is a 0.19 min difference in length between the bottom 90% and the top 10%, a 0.24 BPM difference in tempo, a -0.74 dB difference in loudness, and a -0.03 point difference in acousticness. These small differences imply that length, tempo, loudness, and acousticness, may not have a significant impact on popularity, but that requires further investigation. 
+
+```{r density-tempo, echo = FALSE, message = FALSE, warning = FALSE, fig.height = 3}
+ggplot(spotify, aes(x = tempo, y = Genre, fill = ..x..)) +
+  geom_density_ridges_gradient(scale = 3, rel_min_height = 0.01, bandwidth = 5, 
+                               quantile_lines = TRUE, quantiles = 2) +
+  scale_fill_viridis(option = "C") +
+  labs(title = "Figure 4: Density Plot of the Tempo of top 10% vs bottom 90% of songs", 
+    x = "Tempo", y = "Genre") +
+  theme_bw() +
+  theme(legend.position="none", panel.spacing = unit(0.1, "lines"),
+        strip.text.x = element_text(family = "Tinos", size = 8), 
+        plot.title = element_text(family = "Tinos", size = 11), 
+        axis.title.x = element_text(family = "Tinos"), 
+        axis.title.y = element_text(family = "Tinos")) + 
+  facet_wrap(~ rank)  + 
+  stat_summaryh(fun.x=mean, geom="text", aes(label=sprintf("%1.1f", ..x..)),
+                position=position_nudge(x=60, y = .5), colour="black", size=3.5) +
+  xlim(50,220)
+```
+
+Figure 4 shows that there are only small differences in the average tempo of the top 10% and the bottom 90% of songs when separated by Genre. It is interesting to note that the distribution of tempo is somewhat different. This requires further investigation [@ggridges].
+
+```{r density-length, echo = FALSE, message = FALSE, warning = FALSE, fig.height = 3}
+ggplot(spotify, aes(x = length, y = Genre, fill = ..x..)) +
+  geom_density_ridges_gradient(quantile_lines = TRUE, quantiles = 2) +
+  scale_fill_viridis(option = "C") +
+  labs(title = "Figure 5: Density Plot of Length of top 10% vs bottom 90% of songs", 
+       x = "Length (min)", y = "Genre") +
+  stat_summaryh(fun.x=mean, geom="text", aes(label=sprintf("%.3f", ..x..)),
+                position=position_nudge(x=4, y = .5), colour="black", size=3.5) +
+  theme_bw() + 
+  theme(legend.position="none", panel.spacing = unit(0.1, "lines"),
+        strip.text.x = element_text(size = 8, family = "Tinos"), 
+        plot.title = element_text(family = "Tinos", size = 11), 
+        axis.title.x = element_text(family = "Tinos"), 
+        axis.title.y = element_text(family = "Tinos")) + 
+  facet_wrap(~ rank)  
+```
+
+Figure 5 shows for all genres except Rock, the average length for the bottom 90% of songs is higher than the average length for the top 10% of songs, suggesting that slightly shorter songs may do better in those genres. For Rock, the average length for the bottom 90% of songs is 0.079 minutes less than the average length for the top 10%, suggesting maybe that longer songs may do slightly better in the Rock genre. This requires further investigation [@ggridges]. 
+
+```{r density-loudness, echo = FALSE, message = FALSE, warning = FALSE, fig.height = 3}
+ggplot(spotify, aes(x = loudness, y = Genre, fill = ..x..)) +
+  geom_density_ridges_gradient(quantile_lines = TRUE, quantiles = 2) +
+  scale_fill_viridis(option = "C") +
+  labs(title = "Figure 6: Density Plot of Loudness of top 10% vs bottom 90% of songs", 
+       x = "Loudness (dB)", y = "Genre") +
+  facet_wrap(~ rank) +   
+  stat_summaryh(fun.x=mean, geom="text", aes(label=sprintf("%1.1f", ..x..)),
+                position=position_nudge(x=-10, y = .3), colour="black", size=3.5) + 
+  theme_bw() +
+  theme(legend.position="none", panel.spacing = unit(0.1, "lines"),
+        strip.text.x = element_text(size = 8, family = "Tinos"), 
+        plot.title = element_text(family = "Tinos", size = 11), 
+        axis.title.x = element_text(family = "Tinos"), 
+        axis.title.y = element_text(family = "Tinos")) +
+  xlim(-20,0)
+```
+Figure 6 shows that for all genres except EDM, the average loudness of the bottom 90% of songs is lower (thus quieter) than the average loudness of the top 10% of songs, suggesting that louder songs may be popular for those genres. For EDM, the average loudness is the same for both percentiles (-5.5 BPM), suggesting that loudness may not contribute to popularity for that genre. This requires further investigation [@ggridges]. 
+
+```{r density-acoustic, echo = FALSE, message = FALSE, warning = FALSE, fig.height = 3}
+ggplot(spotify, aes(x = acousticness, y = Genre, fill = ..x..)) +
+  geom_density_ridges_gradient(quantile_lines = TRUE, quantiles = 2,
+                               bandwidth = .05) +
+  scale_fill_viridis(option = "C") +
+  labs(title = "Figure 7: Density Plot of Acousticness of top 10% vs bottom 90% of songs", 
+       x = "Acousticness", y = "Genre") +
+  facet_wrap(~ rank) +   
+  stat_summaryh(fun.x=mean, geom="text", aes(label=sprintf("%.3f", ..x..)),
+                position=position_nudge(x=.5, y = .3), colour="black", size=3.5) + 
+  theme_bw() + 
+  theme(legend.position="none", panel.spacing = unit(0.1, "lines"),
+        strip.text.x = element_text(size = 8, family = "Tinos"), 
+        plot.title = element_text(family = "Tinos", size = 11), 
+        axis.title.x = element_text(family = "Tinos"), 
+        axis.title.y = element_text(family = "Tinos"))
+```
+
+Figure 7 shows that for all genres except rap, average acousticness for the bottom 90% of songs is lower than the average acousticness for the top 10% of songs. This may suggest that more acousticness may correlate to a more popular song for those genres [@ggridges].
+
+
+## Methodology for Results:
+Given our exploratory data analysis, we decided the best way to answer our research questions was through a combination of simulated null distributions and multiple regression models. We simulated null distributions to see if certain genres overall were significantly more popular than others; we used multiple regression models to see if certain factors are significant in predicting popularity and in what way. 
+
+After the exploratory analysis we conducted, we decided to examine exclusively the Pop and Rock genres. We chose to examine the Pop genre because we found that the average popularity of the Pop genre was the largest, suggesting that perhaps Pop songs are more popular on average than any other genre, and we chose to examine the Rock genre because its average popularity deviated the least from the overall average popularity. The overall average popularity is 41.004. 
+
+Another reason we selected these genres was that we saw that they tend to behave differently (see figures 4 through 7). To further delve into this and answer the second part of our research question, we generated multiple regression models for these two genres and also for the entire dataset[@car]. This allowed us to see if these two genres behaved differently from the dataset overall and each other. The multiple regression models include the variables length, tempo, acousticness, and loudness. We chose those variables because they are independent from other variables. Other variables in the dataset, like danceability, depend on things like tempo and rhythm stability. However, length, tempo, acousticness, and loudness are not dependent on any other variables. 
+
+# Results
+
+**Research Question 1: Do some genres tend have more popular songs than others?**
+
+### Simulated Null Distribution for Pop Genre:
+
+$H_0$: There is no significant difference between the mean popularity of the data set as a whole and the mean popularity of songs in the pop genre. 
+
+$H_A$: The mean popularity of the pop genre is significantly greater than the overall mean popularity of the data set.
+
+$$H_0: {\mu}_{pop} = {\mu}_{overall}$$
+$$H_A: {\mu}_{pop}  > {\mu}_{overall}$$
+```{r pop-null-distribution, echo = FALSE, message = FALSE, warning = FALSE, fig.height = 2}
+sim_num = 1000
+
+# simulate null
+set.seed(101321)
+null_dist <- spotify_clean %>%
+  filter(playlist_genre == "pop") %>%
+  specify(response = track_popularity) %>%
+  hypothesize(null = "point", mu = 41.00395) %>%
+  generate(reps = sim_num, type = "bootstrap") %>%
+  calculate(stat = "mean")
+
+# get observed statistic
+obs_stat_pop = spotify_clean %>% filter(playlist_genre == "pop") %>% 
+  summarize(mean(track_popularity)) %>% pull()
+
+visualize(null_dist) +
+  shade_p_value(obs_stat = obs_stat_pop, direction = "right") + 
+  labs(title = "Figure 8: Simulation-Based Null Distribution for Pop Genre Popularity", 
+       x = "Mean", y = "Count") +
+  theme_bw() + 
+  theme(plot.title = element_text(family = "Tinos"), 
+        axis.title.x = element_text(family = "Tinos"), 
+        axis.title.y = element_text(family = "Tinos"))
+
+p_value = null_dist %>%
+  get_p_value(obs_stat_pop, direction = "right")
+p_value %>% 
+  kable(col.names = "p-value")
+```
+
+Given ${\alpha} = 0.05$ and a p value of 0, we reject our null hypothesis. In context, we conclude that the mean popularity of a song in the pop genre is significantly greater than the overall mean of the data set. Overall, this answer part of our research question in that we know pop songs tend to be more popular than others.
+
+
+### Simulated Null Distribution for Rock:
+
+$H_0$: There is no significant difference between the mean popularity of the data set as a whole and the mean popularity of songs in the rock genre. 
+
+$H_A$: There is a significant difference between the mean popularity of the data set as a whole and the mean popularity of songs in the rock genre. 
+
+
+$$H_0: {\mu}_{rock} = {\mu}_{overall}$$
+$$H_A: {\mu}_{rock}  \ {\neq} \ {\mu}_{overall}$$
+
+```{r rock-null-distribution, echo = FALSE, message = FALSE, warning = FALSE, fig.height = 2}
+# simulate null
+null_dist <- spotify_clean %>%
+  filter(playlist_genre == "rock") %>%
+  specify(response = track_popularity) %>%
+  hypothesize(null = "point", mu = 41.00395) %>%
+  generate(reps = sim_num, type = "bootstrap") %>%
+  calculate(stat = "mean")
+
+# get observed statistic
+obs_stat_rock = spotify_clean %>% filter(playlist_genre == "rock") %>% 
+  summarize(mean(track_popularity)) %>% pull()
+
+visualize(null_dist) +
+  shade_p_value(obs_stat = obs_stat_rock, direction = "two-sided") +
+  labs(title = "Figure 9: Simulation-Based Null Distribution for Rock Genre Popularity", 
+       x = "Mean", y = "Count") +
+  theme_bw() + 
+  theme(plot.title = element_text(family = "Tinos"), 
+        axis.title.x = element_text(family = "Tinos"), 
+        axis.title.y = element_text(family = "Tinos"))
+
+p_value2 = null_dist %>%
+  get_p_value(obs_stat_rock, direction = "two-sided")
+
+p_value2 %>% 
+  kable(col.names = "p-value")
+```
+
+Given ${\alpha} = 0.05$ and a p value of 0.114, we fail to reject our null hypothesis. For the rock genre, we can conclude that its mean is not significantly different than the overall mean of the data set. While pop songs tend to be more popular, rock songs are average when it comes to their popularity.
+
+**Research Question 2:  Do length, tempo, loudness and acoustiness tend affect popularity, and in what way? **
+
+### Overall Multiple Regression Model
+
+```{r multiple-regression, echo = FALSE, warning = FALSE, message = FALSE}
+random_1000 = sample_n(spotify_clean, 500)
+
+overall_reg = linear_reg() %>%
+  set_engine("lm") %>%
+  fit(track_popularity ~ length + tempo + loudness + acousticness, 
+      data = spotify_clean) 
+overall_reg %>% tidy()  %>% kable()
+```
+
+Given a ${\alpha} = 0.05$ and p-values of 0 for length, loudness, and acousticness, we can reject the null that $\beta$ is zero and say that these factors are significant predictors of popularity. It is interesting to note that length negatively affects popularity, while loudness and acousticness positively affect popularity. Lastly, given a p-value of 0.4435907 for tempo, we fail to reject the null that $\beta$ is zero and conclude that tempo does not have a significant affect on popularity. Figure 10 visualizes each variable. 
+
+Our fitted model is: $\hat{y} = 54.3 - 3.1x_1 + 0.6x_2 + 11.7x_3$ where $x_1$ is length, $x_2$ is loudness, and $x_3$ is acousticness. 
+
+\newpage
+
+Figure 10: Visualizing Linear Regression of Length, Tempo, Loudness, and Acousticness for All Genres
+
+```{r reg-vis, echo = FALSE, warning = FALSE, message = FALSE}
+
+lm(track_popularity ~ length + tempo + loudness + acousticness,
+   data = random_1000) %>% 
+  avPlots()
+```
+*Note 2: The notation A | Others depicts that all variables that are not on the X or Y axis are held constant.*
+
+### Pop Multiple Regression Model
+
+```{r multiple-regression-pop, echo = FALSE, warning = FALSE, message = FALSE}
+spotify_pop = spotify_clean %>% filter(playlist_genre == "pop")
+
+pop_reg =linear_reg() %>%
+  set_engine("lm") %>%
+  fit(track_popularity ~ length + tempo + loudness + acousticness, 
+      data = spotify_pop) 
+
+pop_reg %>% tidy() %>% 
+  kable()
+```
+
+Given a ${\alpha} = 0.05$ and the p-values of above, we can reject the null that $\beta$ is zero and say all of our factors are significant predictors of popularity. It is interesting to note that tempo for pop has a negative affect on popularity, whereas it was not a significant predictor for the data set overall. It is also interesting that acoustiness does not affect popularity as much as it did in our overal model, whereas length, tempo and loudness all have stronger affects than in our overall model.
+
+Our fitted model is: $\hat{y} = 70.26 - 3.8x_1 - 0.03x_2 + 1.2x_3 + 8.6x_4$ where $x_1$ is length, $x_2$ is tempo, $x_3$ is loudness, and $x_4$ is acousticness. 
+
+### Rock Multiple Regression Model
+
+```{r multiple-regression-rock, echo = FALSE, warning = FALSE, message = FALSE}
+spotify_pop = spotify_clean %>% filter(playlist_genre == "rock")
+
+rock_reg = linear_reg() %>%
+  set_engine("lm") %>%
+  fit(track_popularity ~ length + tempo + loudness + acousticness, 
+      data = spotify_pop) 
+
+rock_reg %>% tidy() %>% 
+  kable()
+```
+
+Given a ${\alpha} = 0.05$ and the p-values of above, we can reject the null that $\beta$ is zero and say length is significant predictor of popularity. On the other hand, we fail to reject the null that $\beta$ is zero for tempo, loudness and acousticness and conclude that they are not significant predictors of popularity. This is notably different than what we saw with the pop genre and with our model for the entire dataset. 
+
+Our fitted model is: $\hat{y} = 45.1 - 0.8x_1$ where $x_1$ is length. 
+
+# Discussion
+
+## Conclusions: 
+We looked at data from Spotify to examine what makes a song popular. We found that across genres, not only is popularity different, but also how certain factors affect popularity.
+
+For our first research question, we asked *Do some genres tend have more popular songs than others on Spotify?*, and chose to focus specifically on the Rock and Pop genres after our exploratory data analysis. Looking at average popularity scores for Pop songs in comparison to average scores for all songs, we found that music in the pop genre tends to be significantly more popular that other genres. For music in the rock genre, we see average popularity. This supports part of the hypothesis we stated in the beginning: Pop songs are more popular than other genres, and the Rock genre has average popularity. However, we hypothesized that the popularity of the other four genres, Rap, R&B, Latin, and Edm, would not be significantly different than the average popularity, but we did not completed simulation-based hypothesis testing for those genres, so we cannot make a judgement on them. 
+
+For our second research question, we asked *do length, tempo, loudness and acoustiness tend affect popularity, and in what way?*. For the data set as a whole, we found insufficient evidence to demonstrate tempo to be a significant predictor of popularity. However, loudness, acousticness, and length were all found to be significant predictors of popularity. We also saw pop behaving slightly different from the data set as a whole, while rock behaved much more different. For pop, we saw all our factors being significant when it comes to predicting popularity. For rock, we saw only length being a significant predictor. It is interesting though that all factors that are significant in several models had the effected popularity the same way (either positively or negatively) in all of those models. Shorter length, higher tempo, smaller loudness (loudness is a negative variable, so a positive $\beta$ means a negative relationship), and higher acousticness increase popularity when those factors are significant. 
+
+Looking back at the goal of our project, we wanted make some recommendations to new or small artists who want to make more popular songs. Based on our findings, our recommendation to them would be to make Pop songs that are shorter, slightly quieter, and with higher acousticness (lower electronic modification). 
+
+## Limitations: 
+
+One limitation of our findings is that while we attempted to remove all duplicate songs from our dataset by removing three playlist identifiers, we had to keep one playlist identifier, genre, in order to examine the genre of the songs. This means that there may be some songs that factored into the data of two genres, because many songs are considered to be part of two genres (for example, Pop-Rock). While we removed as many duplicates as we could, the possible presence of duplicates in our data means that our findings may not be accurate. 
+
+Another limitation is that it is unclear whether Kaylin Pavlik gathered the data randomly from public playlists, private playlists, or both. The data being from only public or private playlists could mean that it is not representative of the entire population. 
+
+```{r r-squared, echo = FALSE, warning = FALSE, message = FALSE}
+overall_r = glance(overall_reg) %>%
+  select(r.squared) %>% round(digits = 4)
+pop_r = glance(pop_reg) %>%
+  select(r.squared) %>% round(digits = 4)
+rock_r = glance(rock_reg) %>%
+  select(r.squared) %>% round(digits = 4)
+
+kable(x = t(c(overall_r, pop_r, rock_r)), 
+      caption = "R^2 Values Across Regression Models", 
+      digits = 3,
+      col.names = c("Overall", "Pop", "Rock"), 
+      )
+```
+
+A further limitation is in the method of analysis we used in answering our second research question. For our multiple regression model, $R^2$ is very low across all models. This indicates that we do not model the variability of our data well. If we were looking to better model the data rather than analyze what factors are significant, it would probably be better to test other types of regression. For example, one would assume that song loudness is not a purely negative relationship, as a song that is excessively quiet would likely be listened to less. 
+
+
+## Further Research:
+We only looked at two genres in our evaluation of the impact of genre on popularity, so it would be interesting to see how other genres influence song popularity to expand on our findings on genre. If we redid our project, we would attempt to examine all of the genres. We could also look into how different factors work in interaction with one another. For instance, it maybe true that people expect certain tempos of certain genres and songs that fit with said expectations are more popular. We looked at factors independently but they definitely could potentially act in interaction to impact popularity.
+
+It would also potentially be a good next step to look to other music streaming services like Pandora or Amazon Music, as well as more outdated modes of music listening like album and cd sales, to see how those results compare to those gleaned from Spotify data. Further, it might be interesting to examine what factors impact the type of music a person likes such as age, gender, location, etc. To find data on this, it might be possible to find something from Spotify or other streaming platforms, though data sharing rules might limit our ability to get this data straight from the source. One way to collect this data would be to randomly sample Spotify users and have them share basic information on themselves as well as the information from the year in review Spotify sends out every year.
+
+If we were to start over, as mentioned in the limitations section, we might look to testing other types of regression to better account for how these factors operate in the real world. We also might look into smaller fractions of popularity, i.e. the top 1% of songs, and see if there is different behavior. This would give us interesting insight on the difference between songs that are just popular and the songs that are true hits. 
+
+
+# References
+
+

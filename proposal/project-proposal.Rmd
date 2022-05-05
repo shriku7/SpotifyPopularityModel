@@ -1,0 +1,71 @@
+---
+title: "Project Proposal"
+author: 'Dancing Queens: Karianna Klassen, Madeline Waterfield, Mark Yukelis, Shrikrishna
+  Sriram'
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+
+```{r load-libraries}
+library(tidyverse)
+library(tidytuesdayR)
+```
+
+```{r load-data}
+spotify_data <- read_csv("spotify_songs.csv")
+covid_data <- read_csv("covid_approval_polls.csv")
+mlb_data <- read_csv("mlb_elo.csv")
+```
+
+
+**Dataset 1**
+
+Data Set #1: Spotify Song Data by Musical Metrics 
+
+This data set comes from the TidyTuesday Github and was sourced using the Spotify API. The data set contains 32,833 observations (songs) from various genres. There are 23 variables, all in all, and are split between identifiers and key metrics. A few important variables are track popularity, energy, and duration_ms.
+
+Research questions for Data Set #1: 
+(1) To what degree does the length of a song affect its popularity? How might this vary across genres?
+(2) Here, are closely aligned metrics such as danceablity and energy truly independent or do certain underlying factors separate them altogether?
+
+
+```{r glimpse-data}
+glimpse(spotify_data)
+```
+
+
+***Dataset 2***
+
+Data Set #2: How American's View Biden's Response to the Coronavirus Crisis from Five Thirty Eight. 
+
+This data is sourced from a variety of polls conducted by different pollsters across the United States who each collected their data in slightly different ways. There are 3,302 observations, or polls, from various pollsters. There are 13 variables that are split between identifiers of the polls (like the pollster) and key metrics like the approval rate. Some important variables are political party of the respondent, sponsor of the poll, and the sample size of the poll. 
+
+Research Questions for Data Set #2: 
+(1) To what degree does political party of the respondents affect the poll's outcome?
+(2) Are a poll's sponsor/pollster and its outcome independent variables, or do some sponsors/pollsters have a higher probability of a certain outcome? 
+
+
+```{r glimpse-data-2}
+glimpse(covid_data)
+```
+
+
+***Dataset 3***
+
+Data Set #3: MLB Elo Data from FiveThirtyEight
+
+This data was sourced from MLB games dating back to 1871. FiveThirtyEight does not specify exactly where the game data is sourced from, but one can assume it was curated from an existing data set of games. It contains game-by-game forecasts and elo ratings calculated by FiveThirtyEight. Some interesting variables are the pitchers that started in the game, the pitchers rolling game score before the game, and the participating teams' elo ratings after the game. ELO ratings are used to rank teams based off of various metrics calculated by FiveThirtyEight.
+
+Research Questions for Data Set #3:
+(1) Which starting pitchers contributed to the greatest increase in their team's elo rating on average?
+(2) How accurate has ELO win probability been over the years, and what factors could it use to be more accurate?
+
+
+```{r glimpse-data-3}
+glimpse(mlb_data)
+```
+
+

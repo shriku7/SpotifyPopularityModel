@@ -1,0 +1,127 @@
+
+```{r load-data, echo = FALSE, message = FALSE}
+spotify_data <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-01-21/spotify_songs.csv')
+```
+
+```{r clean-data, echo = FALSE, message = FALSE}
+spotify_clean <- spotify_data %>%
+  select(-playlist_id, -playlist_name, -playlist_subgenre) %>%
+  distinct()
+
+spotify_clean <- spotify_clean %>%
+  mutate(length = (duration_ms/60000)) %>%
+  mutate(Genre = case_when(playlist_genre == "pop" ~ "Pop",
+                           playlist_genre == "rock" ~ "Rock", 
+                           playlist_genre == "edm" ~ "EDM", 
+                           playlist_genre == "latin" ~ "Latin",
+                           playlist_genre == "rap" ~ "Rap", 
+                           playlist_genre == "r&b" ~ "R&B")) 
+
+spotify_top <- spotify_clean %>%
+  mutate(rank = "TOP 10%") %>%
+  arrange(desc(track_popularity)) %>%
+  slice(1:3038)
+
+spotify_all <- spotify_clean %>%
+  mutate(rank = "Bottom 90%")
+
+spotify <- spotify_top %>%
+  full_join(spotify_all)
+```
+
+```{r load-libraries, echo = FALSE, message = FALSE, warning = FALSE}
+library(tidyverse)
+library(tidytuesdayR)
+library(tidymodels)
+library(car)
+library(plot3D)
+library(viridis)
+library(knitr)
+library(ggplot2)
+library(ggridges)
+library(ggstance)
+```
+
+```{r density-tempo}
+ggplot(reg_data, aes(x = tempo, y = playlist_genre, fill = ..x..)) +
+  geom_density_ridges_gradient(scale = 3, rel_min_height = 0.01, bandwidth = 5, 
+                               quantile_lines = TRUE, quantiles = 2) +
+  scale_fill_viridis(option = "C") +
+  labs(title = 'Density Plot of the Tempo of top 10% vs bottom 90% of songs') +
+    theme(
+      legend.position="none",
+      panel.spacing = unit(0.1, "lines"),
+      strip.text.x = element_text(size = 8)
+    ) + facet_wrap(~ rank)  + 
+  stat_summaryh(fun.x=median, geom="text", aes(label=sprintf("%1.1f", ..x..)),
+                position=position_nudge(x=60, y = .5), colour="black", size=3.5) +
+  labs(
+    x = "Tempo",
+    y = "Genre"
+  ) + 
+  xlim(10,220)
+```
+
+```{r density-length}
+reg_data <- spotify %>%
+  mutate(length_s = length)
+
+ggplot(reg_data, aes(x = length_s, y = playlist_genre, fill = ..x..)) +
+  geom_density_ridges_gradient(quantile_lines = TRUE, quantiles = 2) +
+  scale_fill_viridis(option = "C") +
+  labs(title = 'Density Plot of Length of top 10% vs bottom 90% of songs')+
+  stat_summaryh(fun.x=median, geom="text", aes(label=sprintf("%.3f", ..x..)),
+                position=position_nudge(x=4, y = .5), colour="black", size=3.5) + 
+  labs(
+    x = "Length in Seconds",
+    y = "Genre"
+  ) + 
+    theme(
+      legend.position="none",
+      panel.spacing = unit(0.1, "lines"),
+      strip.text.x = element_text(size = 8)
+    ) + facet_wrap(~ rank)  
+  
+```
+
+
+```{r density-loudness}
+ggplot(spotify, aes(x = loudness, y = playlist_genre, fill = ..x..)) +
+  geom_density_ridges_gradient(quantile_lines = TRUE, quantiles = 2) +
+  scale_fill_viridis(option = "C") +
+  labs(title = 'Density Plot of Loudness of top 10% vs bottom 90% of songs') +
+  facet_wrap(~ rank) +   
+  stat_summaryh(fun.x=median, geom="text", aes(label=sprintf("%1.1f", ..x..)),
+                position=position_nudge(x=-10, y = .3), colour="black", size=3.5) + 
+  labs(
+    x = "Loudness",
+    y = "Genre"
+  ) +
+  theme(
+      legend.position="none",
+      panel.spacing = unit(0.1, "lines"),
+      strip.text.x = element_text(size = 8)
+    ) +
+  xlim(-20,0)
+```
+
+```{r density-acoustic}
+ggplot(spotify, aes(x = acousticness, y = playlist_genre, fill = ..x..)) +
+  geom_density_ridges_gradient(quantile_lines = TRUE, quantiles = 2,
+                               bandwidth = .05) +
+  scale_fill_viridis(option = "C") +
+  labs(title = 'Density Plot of Acousticness of top 10% vs bottom 90% of songs') +
+  facet_wrap(~ rank) +   
+  stat_summaryh(fun.x=median, geom="text", aes(label=sprintf("%.3f", ..x..)),
+                position=position_nudge(x=.5, y = .3), colour="black", size=3.5) + 
+  labs(
+    x = "Loudness",
+    y = "Genre"
+  ) +
+  theme(
+      legend.position="none",
+      panel.spacing = unit(0.01, "lines"),
+      strip.text.x = element_text(size = 8)
+    )
+```
+```
